@@ -57,6 +57,12 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
+        status: {
+          office: "hsl(var(--status-office))",
+          remote: "hsl(var(--status-remote))",
+          vacation: "hsl(var(--status-vacation))",
+          birthday: "hsl(var(--status-birthday))",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",
