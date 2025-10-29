@@ -272,7 +272,7 @@ const Dashboard = () => {
 
                   {hasBirthdaySoon && (
                     <div className="rounded-lg bg-[hsl(var(--status-birthday))] bg-opacity-80 p-2 text-sm">
-                      <p className="font-medium text-[hsl(var(--status-birthday))]">
+                      <p className="font-medium text-[hsl(var(--status-birthday2))]">
                         🎉 Скоро день рождения!
                       </p>
                     </div>
