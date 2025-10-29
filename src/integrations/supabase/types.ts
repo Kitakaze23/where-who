@@ -25,6 +25,7 @@ export type Database = {
           middle_name: string | null
           phone: string | null
           remote_days: string[] | null
+          team: string | null
           updated_at: string
         }
         Insert: {
@@ -37,6 +38,7 @@ export type Database = {
           middle_name?: string | null
           phone?: string | null
           remote_days?: string[] | null
+          team?: string | null
           updated_at?: string
         }
         Update: {
@@ -49,6 +51,7 @@ export type Database = {
           middle_name?: string | null
           phone?: string | null
           remote_days?: string[] | null
+          team?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -73,6 +76,38 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      sick_leave_periods: {
+        Row: {
+          created_at: string
+          employee_id: string
+          end_date: string
+          id: string
+          start_date: string
+        }
+        Insert: {
+          created_at?: string
+          employee_id: string
+          end_date: string
+          id?: string
+          start_date: string
+        }
+        Update: {
+          created_at?: string
+          employee_id?: string
+          end_date?: string
+          id?: string
+          start_date?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sick_leave_periods_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       vacation_periods: {
         Row: {

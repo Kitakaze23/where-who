@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Users, Home, Wifi, Plane, Cake } from "lucide-react";
+import { Users, Home, Wifi, Plane, Cake, Heart } from "lucide-react";
 import { format, isWithinInterval, addDays, isBefore, isAfter } from "date-fns";
 import { ru } from "date-fns/locale";
 
@@ -11,6 +11,7 @@ type Employee = {
   first_name: string;
   last_name: string;
   middle_name: string | null;
+  team: string | null;
   desk_number: number | null;
   phone: string | null;
   birthday: string | null;
@@ -24,11 +25,19 @@ type VacationPeriod = {
   end_date: string;
 };
 
-type EmployeeStatus = "office" | "remote" | "vacation";
+type SickLeavePeriod = {
+  id: string;
+  employee_id: string;
+  start_date: string;
+  end_date: string;
+};
+
+type EmployeeStatus = "office" | "remote" | "vacation" | "sick_leave";
 
 const Dashboard = () => {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [vacations, setVacations] = useState<VacationPeriod[]>([]);
+  const [sickLeaves, setSickLeaves] = useState<SickLeavePeriod[]>([]);
   const [filter, setFilter] = useState<EmployeeStatus | "all">("all");
 
   const getCurrentDayName = () => {
@@ -38,7 +47,20 @@ const Dashboard = () => {
 
   const getEmployeeStatus = (employee: Employee): EmployeeStatus => {
     const today = new Date();
+    today.setHours(0, 0, 0, 0);
     const currentDay = getCurrentDayName();
+
+    // Check if on sick leave (highest priority)
+    const onSickLeave = sickLeaves.some((s) => {
+      if (s.employee_id !== employee.id) return false;
+      const start = new Date(s.start_date);
+      const end = new Date(s.end_date);
+      start.setHours(0, 0, 0, 0);
+      end.setHours(0, 0, 0, 0);
+      return today >= start && today <= end;
+    });
+
+    if (onSickLeave) return "sick_leave";
 
     // Check if on vacation
     const onVacation = vacations.some((v) => {
@@ -59,23 +81,27 @@ const Dashboard = () => {
   const isBirthdaySoon = (birthday: string | null): boolean => {
     if (!birthday) return false;
     const today = new Date();
+    today.setHours(0, 0, 0, 0);
     const birthDate = new Date(birthday);
     
     // Set birth year to current year for comparison
     const thisYearBirthday = new Date(today.getFullYear(), birthDate.getMonth(), birthDate.getDate());
+    thisYearBirthday.setHours(0, 0, 0, 0);
     
-    // Check if birthday is within next 5 days
+    // Check if birthday is today or within next 5 days
     const fiveDaysFromNow = addDays(today, 5);
-    return isAfter(thisYearBirthday, today) && isBefore(thisYearBirthday, fiveDaysFromNow);
+    return (thisYearBirthday >= today) && (thisYearBirthday <= fiveDaysFromNow);
   };
 
   useEffect(() => {
     const fetchData = async () => {
       const { data: employeesData } = await supabase.from("employees").select("*").order("last_name");
       const { data: vacationsData } = await supabase.from("vacation_periods").select("*");
+      const { data: sickLeavesData } = await supabase.from("sick_leave_periods").select("*");
 
       if (employeesData) setEmployees(employeesData);
       if (vacationsData) setVacations(vacationsData);
+      if (sickLeavesData) setSickLeaves(sickLeavesData);
     };
 
     fetchData();
@@ -95,9 +121,17 @@ const Dashboard = () => {
       })
       .subscribe();
 
+    const sickLeavesChannel = supabase
+      .channel("sick-leaves-changes")
+      .on("postgres_changes", { event: "*", schema: "public", table: "sick_leave_periods" }, () => {
+        fetchData();
+      })
+      .subscribe();
+
     return () => {
       supabase.removeChannel(employeesChannel);
       supabase.removeChannel(vacationsChannel);
+      supabase.removeChannel(sickLeavesChannel);
     };
   }, []);
 
@@ -110,6 +144,7 @@ const Dashboard = () => {
     office: { label: "В офисе", icon: Home, color: "bg-[hsl(var(--status-office))]", count: 0 },
     remote: { label: "Удалённо", icon: Wifi, color: "bg-[hsl(var(--status-remote))]", count: 0 },
     vacation: { label: "В отпуске", icon: Plane, color: "bg-[hsl(var(--status-vacation))]", count: 0 },
+    sick_leave: { label: "На больничном", icon: Heart, color: "bg-[hsl(var(--status-sick))]", count: 0 },
   };
 
   employees.forEach((emp) => {
@@ -132,7 +167,7 @@ const Dashboard = () => {
         </div>
 
         {/* Stats */}
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-4">
           {(Object.keys(statusConfig) as EmployeeStatus[]).map((status) => {
             const config = statusConfig[status];
             const Icon = config.icon;
@@ -157,7 +192,7 @@ const Dashboard = () => {
         </div>
 
         {/* Filter badges */}
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <Badge
             variant={filter === "all" ? "default" : "outline"}
             className="cursor-pointer"
@@ -189,7 +224,7 @@ const Dashboard = () => {
               <Card key={employee.id} className="relative overflow-hidden p-6 transition-all hover:shadow-lg">
                 {hasBirthdaySoon && (
                   <div className="absolute right-0 top-0 p-2">
-                    <Cake className="h-5 w-5 text-[hsl(var(--status-birthday))]" />
+                    <Cake className="h-5 w-5 text-[hsl(var(--status-birthday))] animate-pulse" />
                   </div>
                 )}
                 <div className="space-y-3">
@@ -200,6 +235,9 @@ const Dashboard = () => {
                       </h3>
                       {employee.middle_name && (
                         <p className="text-sm text-muted-foreground">{employee.middle_name}</p>
+                      )}
+                      {employee.team && (
+                        <p className="text-sm text-muted-foreground mt-1">Команда: {employee.team}</p>
                       )}
                     </div>
                     <div className={`rounded-full p-2 ${statusInfo.color} bg-opacity-10`}>

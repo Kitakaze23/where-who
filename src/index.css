@@ -42,6 +42,7 @@ All colors MUST be HSL.
     --status-office: 142 76% 36%;
     --status-remote: 199 89% 48%;
     --status-vacation: 25 95% 53%;
+    --status-sick: 0 84% 60%;
     --status-birthday: 330 81% 60%;
 
     /* Gradients */
@@ -91,6 +92,7 @@ All colors MUST be HSL.
     --status-office: 142 70% 45%;
     --status-remote: 199 89% 58%;
     --status-vacation: 25 95% 63%;
+    --status-sick: 0 84% 70%;
     --status-birthday: 330 81% 70%;
 
     /* Gradients for dark mode */

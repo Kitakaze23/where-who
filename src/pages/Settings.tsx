@@ -14,6 +14,7 @@ type Employee = {
   first_name: string;
   last_name: string;
   middle_name: string | null;
+  team: string | null;
   desk_number: number | null;
   phone: string | null;
   birthday: string | null;
@@ -21,6 +22,13 @@ type Employee = {
 };
 
 type VacationPeriod = {
+  id: string;
+  employee_id: string;
+  start_date: string;
+  end_date: string;
+};
+
+type SickLeavePeriod = {
   id: string;
   employee_id: string;
   start_date: string;
@@ -40,12 +48,14 @@ const WEEKDAYS = [
 const Settings = () => {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [vacations, setVacations] = useState<VacationPeriod[]>([]);
+  const [sickLeaves, setSickLeaves] = useState<SickLeavePeriod[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     first_name: "",
     last_name: "",
     middle_name: "",
+    team: "",
     desk_number: "",
     phone: "",
     birthday: "",
@@ -55,11 +65,10 @@ const Settings = () => {
     start_date: "",
     end_date: "",
   });
-
-  useEffect(() => {
-    fetchEmployees();
-    fetchVacations();
-  }, []);
+  const [sickLeaveForm, setSickLeaveForm] = useState({
+    start_date: "",
+    end_date: "",
+  });
 
   const fetchEmployees = async () => {
     const { data } = await supabase.from("employees").select("*").order("last_name");
@@ -71,17 +80,30 @@ const Settings = () => {
     if (data) setVacations(data);
   };
 
+  const fetchSickLeaves = async () => {
+    const { data } = await supabase.from("sick_leave_periods").select("*");
+    if (data) setSickLeaves(data);
+  };
+
+  useEffect(() => {
+    fetchEmployees();
+    fetchVacations();
+    fetchSickLeaves();
+  }, []);
+
   const resetForm = () => {
     setFormData({
       first_name: "",
       last_name: "",
       middle_name: "",
+      team: "",
       desk_number: "",
       phone: "",
       birthday: "",
       remote_days: [],
     });
     setVacationForm({ start_date: "", end_date: "" });
+    setSickLeaveForm({ start_date: "", end_date: "" });
     setEditingId(null);
     setShowForm(false);
   };
@@ -93,6 +115,7 @@ const Settings = () => {
       first_name: formData.first_name,
       last_name: formData.last_name,
       middle_name: formData.middle_name || null,
+      team: formData.team || null,
       desk_number: formData.desk_number ? parseInt(formData.desk_number) : null,
       phone: formData.phone || null,
       birthday: formData.birthday || null,
@@ -125,13 +148,23 @@ const Settings = () => {
           start_date: vacationForm.start_date,
           end_date: vacationForm.end_date,
         });
+        fetchVacations();
+      }
+
+      // Add sick leave period if provided
+      if (newEmployee && sickLeaveForm.start_date && sickLeaveForm.end_date) {
+        await supabase.from("sick_leave_periods").insert({
+          employee_id: newEmployee.id,
+          start_date: sickLeaveForm.start_date,
+          end_date: sickLeaveForm.end_date,
+        });
+        fetchSickLeaves();
       }
 
       toast.success("Сотрудник успешно добавлен");
     }
 
     fetchEmployees();
-    fetchVacations();
     resetForm();
   };
 
@@ -140,6 +173,7 @@ const Settings = () => {
       first_name: employee.first_name,
       last_name: employee.last_name,
       middle_name: employee.middle_name || "",
+      team: employee.team || "",
       desk_number: employee.desk_number?.toString() || "",
       phone: employee.phone || "",
       birthday: employee.birthday || "",
@@ -175,6 +209,10 @@ const Settings = () => {
     return vacations.filter((v) => v.employee_id === employeeId);
   };
 
+  const getEmployeeSickLeaves = (employeeId: string) => {
+    return sickLeaves.filter((s) => s.employee_id === employeeId);
+  };
+
   const deleteVacation = async (vacationId: string) => {
     const { error } = await supabase.from("vacation_periods").delete().eq("id", vacationId);
     if (error) {
@@ -183,6 +221,16 @@ const Settings = () => {
     }
     toast.success("Отпуск удалён");
     fetchVacations();
+  };
+
+  const deleteSickLeave = async (sickLeaveId: string) => {
+    const { error } = await supabase.from("sick_leave_periods").delete().eq("id", sickLeaveId);
+    if (error) {
+      toast.error("Ошибка при удалении больничного");
+      return;
+    }
+    toast.success("Больничный удалён");
+    fetchSickLeaves();
   };
 
   return (
@@ -231,7 +279,16 @@ const Settings = () => {
                 </div>
               </div>
 
-              <div className="grid gap-4 md:grid-cols-3">
+              <div className="grid gap-4 md:grid-cols-4">
+                <div className="space-y-2">
+                  <Label htmlFor="team">Команда</Label>
+                  <Input
+                    id="team"
+                    value={formData.team}
+                    onChange={(e) => setFormData({ ...formData, team: e.target.value })}
+                    placeholder="Название команды"
+                  />
+                </div>
                 <div className="space-y-2">
                   <Label htmlFor="desk_number">Номер стола</Label>
                   <Input
@@ -279,33 +336,63 @@ const Settings = () => {
               </div>
 
               {!editingId && (
-                <div className="space-y-2">
-                  <Label>Добавить отпуск (опционально)</Label>
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label htmlFor="vacation_start">С даты</Label>
-                      <Input
-                        id="vacation_start"
-                        type="date"
-                        value={vacationForm.start_date}
-                        onChange={(e) =>
-                          setVacationForm({ ...vacationForm, start_date: e.target.value })
-                        }
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="vacation_end">По дату</Label>
-                      <Input
-                        id="vacation_end"
-                        type="date"
-                        value={vacationForm.end_date}
-                        onChange={(e) =>
-                          setVacationForm({ ...vacationForm, end_date: e.target.value })
-                        }
-                      />
+                <>
+                  <div className="space-y-2">
+                    <Label>Добавить отпуск (опционально)</Label>
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="vacation_start">С даты</Label>
+                        <Input
+                          id="vacation_start"
+                          type="date"
+                          value={vacationForm.start_date}
+                          onChange={(e) =>
+                            setVacationForm({ ...vacationForm, start_date: e.target.value })
+                          }
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="vacation_end">По дату</Label>
+                        <Input
+                          id="vacation_end"
+                          type="date"
+                          value={vacationForm.end_date}
+                          onChange={(e) =>
+                            setVacationForm({ ...vacationForm, end_date: e.target.value })
+                          }
+                        />
+                      </div>
                     </div>
                   </div>
-                </div>
+
+                  <div className="space-y-2">
+                    <Label>Добавить больничный (опционально)</Label>
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="sick_leave_start">С даты</Label>
+                        <Input
+                          id="sick_leave_start"
+                          type="date"
+                          value={sickLeaveForm.start_date}
+                          onChange={(e) =>
+                            setSickLeaveForm({ ...sickLeaveForm, start_date: e.target.value })
+                          }
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="sick_leave_end">По дату</Label>
+                        <Input
+                          id="sick_leave_end"
+                          type="date"
+                          value={sickLeaveForm.end_date}
+                          onChange={(e) =>
+                            setSickLeaveForm({ ...sickLeaveForm, end_date: e.target.value })
+                          }
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </>
               )}
 
               <div className="flex gap-2">
@@ -323,6 +410,7 @@ const Settings = () => {
           <div className="grid gap-4">
             {employees.map((employee) => {
               const employeeVacations = getEmployeeVacations(employee.id);
+              const employeeSickLeaves = getEmployeeSickLeaves(employee.id);
               return (
                 <Card key={employee.id} className="p-6">
                   <div className="flex items-start justify-between">
@@ -332,6 +420,12 @@ const Settings = () => {
                           {employee.last_name} {employee.first_name} {employee.middle_name}
                         </h3>
                         <div className="mt-2 grid gap-2 text-sm md:grid-cols-2">
+                          {employee.team && (
+                            <p>
+                              <span className="text-muted-foreground">Команда:</span>{" "}
+                              {employee.team}
+                            </p>
+                          )}
                           <p>
                             <span className="text-muted-foreground">Стол:</span>{" "}
                             {employee.desk_number || "—"}
@@ -346,7 +440,7 @@ const Settings = () => {
                               ? format(new Date(employee.birthday), "dd.MM.yyyy")
                               : "—"}
                           </p>
-                          <p>
+                          <p className="md:col-span-2">
                             <span className="text-muted-foreground">Удалённо:</span>{" "}
                             {employee.remote_days?.length > 0
                               ? employee.remote_days
@@ -373,6 +467,30 @@ const Settings = () => {
                                 size="sm"
                                 variant="ghost"
                                 onClick={() => deleteVacation(vacation.id)}
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {employeeSickLeaves.length > 0 && (
+                        <div className="space-y-2">
+                          <p className="font-medium">Больничные:</p>
+                          {employeeSickLeaves.map((sickLeave) => (
+                            <div
+                              key={sickLeave.id}
+                              className="flex items-center justify-between rounded-lg bg-muted p-2"
+                            >
+                              <span className="text-sm">
+                                {format(new Date(sickLeave.start_date), "dd.MM.yyyy")} —{" "}
+                                {format(new Date(sickLeave.end_date), "dd.MM.yyyy")}
+                              </span>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => deleteSickLeave(sickLeave.id)}
                               >
                                 <Trash2 className="h-3 w-3" />
                               </Button>

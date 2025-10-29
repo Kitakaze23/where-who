@@ -61,6 +61,7 @@ export default {
           office: "hsl(var(--status-office))",
           remote: "hsl(var(--status-remote))",
           vacation: "hsl(var(--status-vacation))",
+          sick: "hsl(var(--status-sick))",
           birthday: "hsl(var(--status-birthday))",
         },
       },
