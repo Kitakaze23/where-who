@@ -39,16 +39,21 @@ const Dashboard = () => {
   const [vacations, setVacations] = useState<VacationPeriod[]>([]);
   const [sickLeaves, setSickLeaves] = useState<SickLeavePeriod[]>([]);
   const [filter, setFilter] = useState<EmployeeStatus | "all">("all");
+  const [teamFilter, setTeamFilter] = useState<string | "all">("all");
 
-  const getCurrentDayName = () => {
+  const getDayName = (date: Date) => {
     const days = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
-    return days[new Date().getDay()];
+    return days[date.getDay()];
   };
 
-  const getEmployeeStatus = (employee: Employee): EmployeeStatus => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const currentDay = getCurrentDayName();
+  const getCurrentDayName = () => {
+    return getDayName(new Date());
+  };
+
+  const getEmployeeStatusForDate = (employee: Employee, targetDate: Date): EmployeeStatus => {
+    const checkDate = new Date(targetDate);
+    checkDate.setHours(0, 0, 0, 0);
+    const dayName = getDayName(checkDate);
 
     // Check if on sick leave (highest priority)
     const onSickLeave = sickLeaves.some((s) => {
@@ -57,7 +62,7 @@ const Dashboard = () => {
       const end = new Date(s.end_date);
       start.setHours(0, 0, 0, 0);
       end.setHours(0, 0, 0, 0);
-      return today >= start && today <= end;
+      return checkDate >= start && checkDate <= end;
     });
 
     if (onSickLeave) return "sick_leave";
@@ -67,15 +72,29 @@ const Dashboard = () => {
       if (v.employee_id !== employee.id) return false;
       const start = new Date(v.start_date);
       const end = new Date(v.end_date);
-      return isWithinInterval(today, { start, end });
+      start.setHours(0, 0, 0, 0);
+      end.setHours(0, 0, 0, 0);
+      return checkDate >= start && checkDate <= end;
     });
 
     if (onVacation) return "vacation";
 
     // Check if remote day
-    if (employee.remote_days?.includes(currentDay)) return "remote";
+    if (employee.remote_days?.includes(dayName)) return "remote";
 
     return "office";
+  };
+
+  const getEmployeeStatus = (employee: Employee): EmployeeStatus => {
+    return getEmployeeStatusForDate(employee, new Date());
+  };
+
+  const getAvailableDesksCount = (date: Date): number => {
+    return employees.filter((emp) => {
+      if (!emp.desk_number) return false;
+      const status = getEmployeeStatusForDate(emp, date);
+      return status === "office";
+    }).length;
   };
 
   const isBirthdaySoon = (birthday: string | null): boolean => {
@@ -136,9 +155,12 @@ const Dashboard = () => {
   }, []);
 
   const filteredEmployees = employees.filter((emp) => {
-    if (filter === "all") return true;
-    return getEmployeeStatus(emp) === filter;
+    const statusMatch = filter === "all" || getEmployeeStatus(emp) === filter;
+    const teamMatch = teamFilter === "all" || emp.team === teamFilter;
+    return statusMatch && teamMatch;
   });
+
+  const uniqueTeams = Array.from(new Set(employees.map((e) => e.team).filter(Boolean))) as string[];
 
   const statusConfig = {
     office: { label: "В офисе", icon: Home, color: "bg-[hsl(var(--status-office))]", count: 0 },
@@ -152,6 +174,11 @@ const Dashboard = () => {
     statusConfig[status].count++;
   });
 
+  const today = new Date();
+  const tomorrow = addDays(today, 1);
+  const availableDesksToday = getAvailableDesksCount(today);
+  const availableDesksTomorrow = getAvailableDesksCount(tomorrow);
+
   return (
     <div className="min-h-screen bg-background p-6">
       <div className="mx-auto max-w-7xl space-y-8">
@@ -164,6 +191,28 @@ const Dashboard = () => {
             </p>
           </div>
           <Users className="h-12 w-12 text-primary" />
+        </div>
+
+        {/* Available Desks */}
+        <div className="grid gap-4 md:grid-cols-2">
+          <Card className="p-6 bg-gradient-to-br from-primary/10 to-primary/5">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Свободных столов сегодня</p>
+                <p className="mt-2 text-3xl font-bold text-foreground">{availableDesksToday}</p>
+              </div>
+              <Home className="h-8 w-8 text-primary" />
+            </div>
+          </Card>
+          <Card className="p-6 bg-gradient-to-br from-secondary/10 to-secondary/5">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Свободных столов завтра</p>
+                <p className="mt-2 text-3xl font-bold text-foreground">{availableDesksTomorrow}</p>
+              </div>
+              <Home className="h-8 w-8 text-secondary" />
+            </div>
+          </Card>
         </div>
 
         {/* Stats */}
@@ -192,24 +241,53 @@ const Dashboard = () => {
         </div>
 
         {/* Filter badges */}
-        <div className="flex gap-2 flex-wrap">
-          <Badge
-            variant={filter === "all" ? "default" : "outline"}
-            className="cursor-pointer"
-            onClick={() => setFilter("all")}
-          >
-            Все ({employees.length})
-          </Badge>
-          {(Object.keys(statusConfig) as EmployeeStatus[]).map((status) => (
-            <Badge
-              key={status}
-              variant={filter === status ? "default" : "outline"}
-              className="cursor-pointer"
-              onClick={() => setFilter(status)}
-            >
-              {statusConfig[status].label} ({statusConfig[status].count})
-            </Badge>
-          ))}
+        <div className="space-y-3">
+          <div>
+            <p className="text-sm font-medium mb-2">Статус:</p>
+            <div className="flex gap-2 flex-wrap">
+              <Badge
+                variant={filter === "all" ? "default" : "outline"}
+                className="cursor-pointer"
+                onClick={() => setFilter("all")}
+              >
+                Все ({employees.length})
+              </Badge>
+              {(Object.keys(statusConfig) as EmployeeStatus[]).map((status) => (
+                <Badge
+                  key={status}
+                  variant={filter === status ? "default" : "outline"}
+                  className="cursor-pointer"
+                  onClick={() => setFilter(status)}
+                >
+                  {statusConfig[status].label} ({statusConfig[status].count})
+                </Badge>
+              ))}
+            </div>
+          </div>
+          {uniqueTeams.length > 0 && (
+            <div>
+              <p className="text-sm font-medium mb-2">Команда:</p>
+              <div className="flex gap-2 flex-wrap">
+                <Badge
+                  variant={teamFilter === "all" ? "default" : "outline"}
+                  className="cursor-pointer"
+                  onClick={() => setTeamFilter("all")}
+                >
+                  Все команды
+                </Badge>
+                {uniqueTeams.map((team) => (
+                  <Badge
+                    key={team}
+                    variant={teamFilter === team ? "default" : "outline"}
+                    className="cursor-pointer"
+                    onClick={() => setTeamFilter(team)}
+                  >
+                    {team}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Employees grid */}
