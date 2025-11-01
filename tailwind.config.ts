@@ -62,6 +62,7 @@ export default {
           remote: "hsl(var(--status-remote))",
           vacation: "hsl(var(--status-vacation))",
           sick: "hsl(var(--status-sick))",
+          upcomingVacation: "hsl(var(--status-upcoming-vacation))",
           birthday: "hsl(var(--status-birthday))",
         },
       },

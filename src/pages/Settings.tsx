@@ -49,6 +49,8 @@ const Settings = () => {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [vacations, setVacations] = useState<VacationPeriod[]>([]);
   const [sickLeaves, setSickLeaves] = useState<SickLeavePeriod[]>([]);
+  const [totalDesks, setTotalDesks] = useState<number>(50);
+  const [isEditingDesks, setIsEditingDesks] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
@@ -88,10 +90,20 @@ const Settings = () => {
     if (data) setSickLeaves(data);
   };
 
+  const fetchSettings = async () => {
+    const { data } = await supabase
+      .from("settings")
+      .select("*")
+      .eq("setting_key", "total_desks")
+      .single();
+    if (data) setTotalDesks(parseInt(data.setting_value));
+  };
+
   useEffect(() => {
     fetchEmployees();
     fetchVacations();
     fetchSickLeaves();
+    fetchSettings();
   }, []);
 
   const resetForm = () => {
@@ -341,6 +353,21 @@ const Settings = () => {
     setEditingSickLeaveId(null);
   };
 
+  const handleUpdateTotalDesks = async () => {
+    const { error } = await supabase
+      .from("settings")
+      .update({ setting_value: totalDesks.toString() })
+      .eq("setting_key", "total_desks");
+    
+    if (error) {
+      toast.error("Ошибка при обновлении количества столов");
+      return;
+    }
+    
+    toast.success("Количество столов обновлено");
+    setIsEditingDesks(false);
+  };
+
   return (
     <div className="min-h-screen bg-background p-6">
       <div className="mx-auto max-w-7xl space-y-8">
@@ -351,6 +378,45 @@ const Settings = () => {
             {showForm ? "Отмена" : "Добавить сотрудника"}
           </Button>
         </div>
+
+        {/* Office Settings */}
+        <Card className="p-6">
+          <h2 className="mb-4 text-2xl font-semibold">Настройки офиса</h2>
+          <div className="flex items-end gap-4">
+            <div className="flex-1 space-y-2">
+              <Label htmlFor="total_desks">Количество доступных столов</Label>
+              <Input
+                id="total_desks"
+                type="number"
+                value={totalDesks}
+                onChange={(e) => setTotalDesks(parseInt(e.target.value) || 0)}
+                disabled={!isEditingDesks}
+                min="0"
+              />
+            </div>
+            {!isEditingDesks ? (
+              <Button onClick={() => setIsEditingDesks(true)} variant="outline">
+                <Pencil className="h-4 w-4 mr-2" />
+                Изменить
+              </Button>
+            ) : (
+              <div className="flex gap-2">
+                <Button onClick={handleUpdateTotalDesks}>
+                  Сохранить
+                </Button>
+                <Button 
+                  onClick={() => {
+                    setIsEditingDesks(false);
+                    fetchSettings();
+                  }} 
+                  variant="outline"
+                >
+                  Отмена
+                </Button>
+              </div>
+            )}
+          </div>
+        </Card>
 
         {showForm && (
           <Card className="p-6">

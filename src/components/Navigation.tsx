@@ -1,15 +1,24 @@
-import { Link, useLocation } from "react-router-dom";
-import { Home, Settings, MapPin } from "lucide-react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Home, Settings, MapPin, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 
 const Navigation = () => {
   const location = useLocation();
+  const navigate = useNavigate();
 
   const links = [
     { href: "/", label: "Дашборд", icon: Home },
     { href: "/seating", label: "Рассадка", icon: MapPin },
     { href: "/settings", label: "Настройки", icon: Settings },
   ];
+
+  const handleLogout = () => {
+    localStorage.removeItem("authenticated");
+    navigate("/login");
+    toast.success("Вы вышли из системы");
+  };
 
   return (
     <nav className="border-b bg-card">
@@ -22,7 +31,7 @@ const Navigation = () => {
             <span className="text-xl font-bold">Office Tracker</span>
           </div>
 
-          <div className="flex gap-1">
+          <div className="flex items-center gap-1">
             {links.map((link) => {
               const Icon = link.icon;
               const isActive = location.pathname === link.href;
@@ -43,6 +52,16 @@ const Navigation = () => {
                 </Link>
               );
             })}
+            
+            <Button 
+              onClick={handleLogout} 
+              variant="ghost" 
+              size="sm"
+              className="ml-2 gap-2 text-muted-foreground hover:text-foreground"
+            >
+              <LogOut className="h-4 w-4" />
+              <span className="font-medium">Выход</span>
+            </Button>
           </div>
         </div>
       </div>

@@ -32,7 +32,7 @@ type SickLeavePeriod = {
   end_date: string;
 };
 
-type EmployeeStatus = "office" | "remote" | "vacation" | "sick_leave";
+type EmployeeStatus = "office" | "remote" | "vacation" | "sick_leave" | "upcoming_vacation";
 
 const Dashboard = () => {
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -40,6 +40,7 @@ const Dashboard = () => {
   const [sickLeaves, setSickLeaves] = useState<SickLeavePeriod[]>([]);
   const [filter, setFilter] = useState<EmployeeStatus | "all">("all");
   const [teamFilter, setTeamFilter] = useState<string | "all">("all");
+  const [totalDesks, setTotalDesks] = useState<number>(50);
 
   const getDayName = (date: Date) => {
     const days = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
@@ -79,6 +80,17 @@ const Dashboard = () => {
 
     if (onVacation) return "vacation";
 
+    // Check if vacation is coming soon (within 2 weeks)
+    const twoWeeksFromNow = addDays(checkDate, 14);
+    const upcomingVacation = vacations.some((v) => {
+      if (v.employee_id !== employee.id) return false;
+      const start = new Date(v.start_date);
+      start.setHours(0, 0, 0, 0);
+      return start > checkDate && start <= twoWeeksFromNow;
+    });
+
+    if (upcomingVacation) return "upcoming_vacation";
+
     // Check if remote day
     if (employee.remote_days?.includes(dayName)) return "remote";
 
@@ -90,11 +102,38 @@ const Dashboard = () => {
   };
 
   const getAvailableDesksCount = (date: Date): number => {
-    return employees.filter((emp) => {
-      if (!emp.desk_number) return false;
+    const peopleInOffice = employees.filter((emp) => {
       const status = getEmployeeStatusForDate(emp, date);
       return status === "office";
     }).length;
+    return totalDesks - peopleInOffice;
+  };
+
+  const getCurrentVacationPeriod = (employee: Employee): VacationPeriod | null => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    return vacations.find((v) => {
+      if (v.employee_id !== employee.id) return false;
+      const start = new Date(v.start_date);
+      const end = new Date(v.end_date);
+      start.setHours(0, 0, 0, 0);
+      end.setHours(0, 0, 0, 0);
+      return today >= start && today <= end;
+    }) || null;
+  };
+
+  const getUpcomingVacationPeriod = (employee: Employee): VacationPeriod | null => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const twoWeeksFromNow = addDays(today, 14);
+    
+    return vacations.find((v) => {
+      if (v.employee_id !== employee.id) return false;
+      const start = new Date(v.start_date);
+      start.setHours(0, 0, 0, 0);
+      return start > today && start <= twoWeeksFromNow;
+    }) || null;
   };
 
   const isBirthdaySoon = (birthday: string | null): boolean => {
@@ -117,10 +156,16 @@ const Dashboard = () => {
       const { data: employeesData } = await supabase.from("employees").select("*").order("last_name");
       const { data: vacationsData } = await supabase.from("vacation_periods").select("*");
       const { data: sickLeavesData } = await supabase.from("sick_leave_periods").select("*");
+      const { data: settingsData } = await supabase
+        .from("settings")
+        .select("*")
+        .eq("setting_key", "total_desks")
+        .single();
 
       if (employeesData) setEmployees(employeesData);
       if (vacationsData) setVacations(vacationsData);
       if (sickLeavesData) setSickLeaves(sickLeavesData);
+      if (settingsData) setTotalDesks(parseInt(settingsData.setting_value));
     };
 
     fetchData();
@@ -147,10 +192,18 @@ const Dashboard = () => {
       })
       .subscribe();
 
+    const settingsChannel = supabase
+      .channel("settings-changes")
+      .on("postgres_changes", { event: "*", schema: "public", table: "settings" }, () => {
+        fetchData();
+      })
+      .subscribe();
+
     return () => {
       supabase.removeChannel(employeesChannel);
       supabase.removeChannel(vacationsChannel);
       supabase.removeChannel(sickLeavesChannel);
+      supabase.removeChannel(settingsChannel);
     };
   }, []);
 
@@ -167,6 +220,7 @@ const Dashboard = () => {
     remote: { label: "Удалённо", icon: Wifi, color: "bg-[hsl(var(--status-remote))]", count: 0 },
     vacation: { label: "В отпуске", icon: Plane, color: "bg-[hsl(var(--status-vacation))]", count: 0 },
     sick_leave: { label: "На больничном", icon: Heart, color: "bg-[hsl(var(--status-sick))]", count: 0 },
+    upcoming_vacation: { label: "Скоро отпуск", icon: Plane, color: "bg-[hsl(var(--status-upcoming-vacation))]", count: 0 },
   };
 
   employees.forEach((emp) => {
@@ -275,16 +329,19 @@ const Dashboard = () => {
                 >
                   Все команды
                 </Badge>
-                {uniqueTeams.map((team) => (
-                  <Badge
-                    key={team}
-                    variant={teamFilter === team ? "default" : "outline"}
-                    className="cursor-pointer"
-                    onClick={() => setTeamFilter(team)}
-                  >
-                    {team}
-                  </Badge>
-                ))}
+                {uniqueTeams.map((team) => {
+                  const teamCount = employees.filter((e) => e.team === team).length;
+                  return (
+                    <Badge
+                      key={team}
+                      variant={teamFilter === team ? "default" : "outline"}
+                      className="cursor-pointer"
+                      onClick={() => setTeamFilter(team)}
+                    >
+                      {team} ({teamCount})
+                    </Badge>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -297,6 +354,8 @@ const Dashboard = () => {
             const statusInfo = statusConfig[status];
             const Icon = statusInfo.icon;
             const hasBirthdaySoon = isBirthdaySoon(employee.birthday);
+            const currentVacation = status === "vacation" ? getCurrentVacationPeriod(employee) : null;
+            const upcomingVacation = status === "upcoming_vacation" ? getUpcomingVacationPeriod(employee) : null;
 
             return (
               <Card key={employee.id} className="relative overflow-hidden p-6 transition-all hover:shadow-lg">
@@ -346,7 +405,21 @@ const Dashboard = () => {
                     )}
                   </div>
 
-                  <Badge className={statusInfo.color}>{statusInfo.label}</Badge>
+                  <div className="space-y-2">
+                    <Badge className={statusInfo.color}>{statusInfo.label}</Badge>
+                    
+                    {currentVacation && (
+                      <div className="text-xs text-muted-foreground">
+                        {format(new Date(currentVacation.start_date), "d MMM", { locale: ru })} - {format(new Date(currentVacation.end_date), "d MMM", { locale: ru })}
+                      </div>
+                    )}
+                    
+                    {upcomingVacation && (
+                      <div className="text-xs text-muted-foreground">
+                        {format(new Date(upcomingVacation.start_date), "d MMM", { locale: ru })} - {format(new Date(upcomingVacation.end_date), "d MMM", { locale: ru })}
+                      </div>
+                    )}
+                  </div>
 
                   {hasBirthdaySoon && (
                     <div className="rounded-lg bg-[hsl(var(--status-birthday))] bg-opacity-80 p-2 text-sm">
