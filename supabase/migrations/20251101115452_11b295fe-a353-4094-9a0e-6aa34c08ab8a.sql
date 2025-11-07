@@ -19,7 +19,7 @@ WITH CHECK (true);
 
 -- Insert default total desks setting
 INSERT INTO public.settings (setting_key, setting_value) 
-VALUES ('total_desks', '50');
+VALUES ('total_desks', '10');
 
 -- Create trigger for automatic timestamp updates
 CREATE TRIGGER update_settings_updated_at
