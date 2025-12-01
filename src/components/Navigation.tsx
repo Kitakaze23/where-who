@@ -26,7 +26,7 @@ const Navigation = () => {
   return (
     <nav className="border-b bg-card">
       <div className="mx-auto max-w-7xl px-6">
-        <div className="flex h-16 items-center justify-between">
+        <div className="flex min-h-16 flex-col items-center justify-center gap-3 py-3 md:h-16 md:flex-row md:justify-between md:py-0">
           <div className="flex items-center gap-2">
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary">
               <Home className="h-5 w-5 text-primary-foreground" />
@@ -34,7 +34,7 @@ const Navigation = () => {
             <span className="text-xl font-bold">Удаленка и рассадка</span>
           </div>
 
-          <div className="flex items-center gap-1">
+          <div className="flex flex-wrap items-center justify-center gap-1">
             {links.map((link) => {
               const Icon = link.icon;
               const isActive = location.pathname === link.href;
