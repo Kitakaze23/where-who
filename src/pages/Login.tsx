@@ -103,7 +103,7 @@ const Login = () => {
             <Lock className="h-8 w-8 text-primary" />
           </div>
           <div className="text-center">
-            <h1 className="text-2xl font-bold text-foreground">Система управления сотрудниками</h1>
+            <h1 className="text-2xl font-bold text-foreground">Система рассадки сотрудников</h1>
             <p className="mt-2 text-muted-foreground">Войдите или зарегистрируйтесь</p>
           </div>
 
