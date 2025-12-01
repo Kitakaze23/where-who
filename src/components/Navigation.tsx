@@ -1,22 +1,25 @@
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { Home, Settings, MapPin, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { useAuth } from "@/hooks/useAuth";
 
 const Navigation = () => {
   const location = useLocation();
-  const navigate = useNavigate();
+  const { role, signOut } = useAuth();
 
-  const links = [
-    { href: "/", label: "Дашборд", icon: Home },
-    { href: "/seating", label: "Рассадка", icon: MapPin },
-    { href: "/settings", label: "Настройки", icon: Settings },
+  const allLinks = [
+    { href: "/", label: "Дашборд", icon: Home, adminOnly: false },
+    { href: "/seating", label: "Рассадка", icon: MapPin, adminOnly: false },
+    { href: "/settings", label: "Настройки", icon: Settings, adminOnly: true },
   ];
 
-  const handleLogout = () => {
-    localStorage.removeItem("authenticated");
-    navigate("/login");
+  // Filter links based on role
+  const links = allLinks.filter((link) => !link.adminOnly || role === "admin");
+
+  const handleLogout = async () => {
+    await signOut();
     toast.success("Вы вышли из системы");
   };
 
