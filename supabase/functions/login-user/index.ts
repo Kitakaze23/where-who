@@ -15,10 +15,16 @@ Deno.serve(async (req) => {
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+    
+    // Client with service role for admin operations
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+    
+    // Client with anon key for user authentication
+    const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey);
 
     // Get company
-    const { data: company, error: companyError } = await supabase
+    const { data: company, error: companyError } = await supabaseAdmin
       .from('companies')
       .select('id, name, user_password')
       .eq('name', companyName)
@@ -30,14 +36,14 @@ Deno.serve(async (req) => {
 
     // Try to login as admin first
     const email = `${companyName}@company.local`;
-    const { data: adminAuth, error: adminError } = await supabase.auth.signInWithPassword({
+    const { data: adminAuth, error: adminError } = await supabaseAuth.auth.signInWithPassword({
       email,
       password,
     });
 
     if (!adminError && adminAuth.user) {
       // Get admin role
-      const { data: role } = await supabase
+      const { data: role } = await supabaseAdmin
         .from('user_roles')
         .select('role')
         .eq('user_id', adminAuth.user.id)
@@ -66,16 +72,16 @@ Deno.serve(async (req) => {
       const userEmail = `${companyName}.user@company.local`;
       
       let userId: string;
-      const { data: existingUser } = await supabase.auth.admin.listUsers();
+      const { data: existingUser } = await supabaseAdmin.auth.admin.listUsers();
       const foundUser = existingUser.users.find(u => u.email === userEmail);
 
       if (foundUser) {
         userId = foundUser.id;
         // Update password
-        await supabase.auth.admin.updateUserById(userId, { password });
+        await supabaseAdmin.auth.admin.updateUserById(userId, { password });
       } else {
         // Create user
-        const { data: newUser, error: createError } = await supabase.auth.admin.createUser({
+        const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
           email: userEmail,
           password,
           email_confirm: true,
@@ -85,13 +91,13 @@ Deno.serve(async (req) => {
         userId = newUser.user.id;
 
         // Create profile
-        await supabase.from('profiles').insert({
+        await supabaseAdmin.from('profiles').insert({
           id: userId,
           company_id: company.id,
         });
 
         // Create user role
-        await supabase.from('user_roles').insert({
+        await supabaseAdmin.from('user_roles').insert({
           user_id: userId,
           role: 'user',
           company_id: company.id,
@@ -99,7 +105,7 @@ Deno.serve(async (req) => {
       }
 
       // Sign in as user
-      const { data: userAuth, error: userError } = await supabase.auth.signInWithPassword({
+      const { data: userAuth, error: userError } = await supabaseAuth.auth.signInWithPassword({
         email: userEmail,
         password,
       });
