@@ -41,7 +41,7 @@ const Dashboard = () => {
   const [sickLeaves, setSickLeaves] = useState<SickLeavePeriod[]>([]);
   const [filter, setFilter] = useState<EmployeeStatus | "all">("all");
   const [teamFilter, setTeamFilter] = useState<string | "all">("all");
-  const [totalDesks, setTotalDesks] = useState<number>(50);
+  const [totalDesks, setTotalDesks] = useState<number>(0);
 
   const getDayName = (date: Date) => {
     const days = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
