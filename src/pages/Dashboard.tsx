@@ -11,6 +11,7 @@ type Employee = {
   first_name: string;
   last_name: string;
   middle_name: string | null;
+  position: string | null;
   team: string | null;
   desk_number: number | null;
   phone: string | null;
@@ -373,8 +374,11 @@ const Dashboard = () => {
                       {employee.middle_name && (
                         <p className="text-sm text-muted-foreground">{employee.middle_name}</p>
                       )}
+                      {employee.position && (
+                        <p className="text-sm text-muted-foreground mt-1">{employee.position}</p>
+                      )}
                       {employee.team && (
-                        <p className="text-sm text-muted-foreground mt-1">Команда: {employee.team}</p>
+                        <p className="text-sm text-muted-foreground">Команда: {employee.team}</p>
                       )}
                     </div>
                     <div className={`rounded-full p-2 ${statusInfo.color} bg-opacity-10`}>
@@ -419,6 +423,36 @@ const Dashboard = () => {
                         {format(new Date(upcomingVacation.start_date), "d MMM", { locale: ru })} - {format(new Date(upcomingVacation.end_date), "d MMM", { locale: ru })}
                       </div>
                     )}
+
+                    {/* Work Schedule */}
+                    <div className="mt-3 pt-3 border-t">
+                      <p className="text-xs font-medium text-muted-foreground mb-2">График:</p>
+                      <div className="flex gap-1">
+                        {["monday", "tuesday", "wednesday", "thursday", "friday"].map((day) => {
+                          const dayLabels: Record<string, string> = {
+                            monday: "Пн",
+                            tuesday: "Вт",
+                            wednesday: "Ср",
+                            thursday: "Чт",
+                            friday: "Пт",
+                          };
+                          const isRemote = employee.remote_days?.includes(day);
+                          return (
+                            <div
+                              key={day}
+                              className={`flex items-center justify-center w-8 h-8 rounded text-xs font-medium ${
+                                isRemote
+                                  ? "bg-[hsl(var(--status-remote))] text-[hsl(var(--status-remote))]"
+                                  : "bg-[hsl(var(--status-office))] text-[hsl(var(--status-office))]"
+                              } bg-opacity-10`}
+                              title={isRemote ? "Удалённо" : "В офисе"}
+                            >
+                              {dayLabels[day]}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
                   </div>
 
                   {hasBirthdaySoon && (
