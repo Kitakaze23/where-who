@@ -53,6 +53,8 @@ export type Database = {
           remote_days: string[] | null
           team: string | null
           updated_at: string
+          user_login: string | null
+          user_password: string | null
         }
         Insert: {
           birthday?: string | null
@@ -68,6 +70,8 @@ export type Database = {
           remote_days?: string[] | null
           team?: string | null
           updated_at?: string
+          user_login?: string | null
+          user_password?: string | null
         }
         Update: {
           birthday?: string | null
@@ -83,6 +87,8 @@ export type Database = {
           remote_days?: string[] | null
           team?: string | null
           updated_at?: string
+          user_login?: string | null
+          user_password?: string | null
         }
         Relationships: [
           {

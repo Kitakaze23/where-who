@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Plus, Pencil, Trash2, Key } from "lucide-react";
+import { Plus, Pencil, Trash2, Key, Copy } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { useAuth } from "@/hooks/useAuth";
@@ -22,6 +22,8 @@ type Employee = {
   phone: string | null;
   birthday: string | null;
   remote_days: string[];
+  user_login: string | null;
+  user_password: string | null;
 };
 
 type VacationPeriod = {
@@ -67,6 +69,8 @@ const Settings = () => {
     phone: "",
     birthday: "",
     remote_days: [] as string[],
+    user_login: "",
+    user_password: "",
   });
   const [vacationForm, setVacationForm] = useState({
     start_date: "",
@@ -156,6 +160,13 @@ const Settings = () => {
     };
   }, [user]);
 
+  const generateCredentials = () => {
+    const randomString = Math.random().toString(36).substring(2, 8);
+    const login = `user_${randomString}`;
+    const password = Math.random().toString(36).substring(2, 10);
+    return { login, password };
+  };
+
   const resetForm = () => {
     setFormData({
       first_name: "",
@@ -167,6 +178,8 @@ const Settings = () => {
       phone: "",
       birthday: "",
       remote_days: [],
+      user_login: "",
+      user_password: "",
     });
     setVacationForm({ start_date: "", end_date: "" });
     setSickLeaveForm({ start_date: "", end_date: "" });
@@ -177,7 +190,7 @@ const Settings = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const employeeData = {
+    const employeeData: any = {
       first_name: formData.first_name,
       last_name: formData.last_name,
       middle_name: formData.middle_name || null,
@@ -187,6 +200,8 @@ const Settings = () => {
       phone: formData.phone || null,
       birthday: formData.birthday || null,
       remote_days: formData.remote_days,
+      user_login: formData.user_login || null,
+      user_password: formData.user_password || null,
     };
 
     if (editingId) {
@@ -197,6 +212,11 @@ const Settings = () => {
       }
       toast.success("Сотрудник успешно обновлён");
     } else {
+      // Generate credentials for new employee
+      const credentials = generateCredentials();
+      employeeData.user_login = credentials.login;
+      employeeData.user_password = credentials.password;
+      
       const { data: newEmployee, error } = await supabase
         .from("employees")
         .insert(employeeData)
@@ -243,9 +263,20 @@ const Settings = () => {
       phone: employee.phone || "",
       birthday: employee.birthday || "",
       remote_days: employee.remote_days || [],
+      user_login: employee.user_login || "",
+      user_password: employee.user_password || "",
     });
     setEditingId(employee.id);
     setShowForm(true);
+  };
+
+  const copyToClipboard = async (text: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success(`${label} скопирован`);
+    } catch (error) {
+      toast.error("Не удалось скопировать");
+    }
   };
 
   const handleDelete = async (id: string) => {
@@ -672,6 +703,57 @@ const Settings = () => {
                 </div>
               </div>
 
+              {editingId && (
+                <div className="space-y-2">
+                  <Label>Данные для входа сотрудника</Label>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="user_login">Логин</Label>
+                      <div className="flex gap-2">
+                        <Input
+                          id="user_login"
+                          value={formData.user_login}
+                          onChange={(e) => setFormData({ ...formData, user_login: e.target.value })}
+                          placeholder="Логин для входа"
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => copyToClipboard(formData.user_login, "Логин")}
+                          disabled={!formData.user_login}
+                        >
+                          Копировать
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="user_password">Пароль</Label>
+                      <div className="flex gap-2">
+                        <Input
+                          id="user_password"
+                          value={formData.user_password}
+                          onChange={(e) => setFormData({ ...formData, user_password: e.target.value })}
+                          placeholder="Пароль для входа"
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => copyToClipboard(formData.user_password, "Пароль")}
+                          disabled={!formData.user_password}
+                        >
+                          Копировать
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    По этим данным сотрудник может войти в систему для просмотра дашборда и рассадки
+                  </p>
+                </div>
+              )}
+
               {!editingId && (
                 <>
                   <div className="space-y-2">
@@ -793,6 +875,42 @@ const Settings = () => {
                           </p>
                         </div>
                       </div>
+
+                      {employee.user_login && employee.user_password && (
+                        <div className="rounded-lg bg-muted/50 p-3 space-y-2">
+                          <p className="font-medium text-sm">Данные для входа:</p>
+                          <div className="grid gap-2 md:grid-cols-2 text-sm">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-muted-foreground">Логин:</span>
+                              <div className="flex items-center gap-1">
+                                <span className="font-mono">{employee.user_login}</span>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-6 w-6 p-0"
+                                  onClick={() => copyToClipboard(employee.user_login!, "Логин")}
+                                >
+                                  <Copy className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            </div>
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-muted-foreground">Пароль:</span>
+                              <div className="flex items-center gap-1">
+                                <span className="font-mono">{employee.user_password}</span>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-6 w-6 p-0"
+                                  onClick={() => copyToClipboard(employee.user_password!, "Пароль")}
+                                >
+                                  <Copy className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
 
                       <div className="space-y-2">
                         <div className="flex items-center justify-between">
