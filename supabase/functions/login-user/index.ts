@@ -56,6 +56,7 @@ Deno.serve(async (req) => {
             success: true,
             role: 'admin',
             session: adminAuth.session,
+            user: adminAuth.user,
           }),
           {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
