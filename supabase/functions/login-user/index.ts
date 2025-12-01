@@ -165,6 +165,108 @@ Deno.serve(async (req) => {
       );
     }
 
+    // Check if it's an employee login
+    const { data: employee, error: employeeError } = await supabaseAdmin
+      .from('employees')
+      .select('id, user_login, user_password, company_id')
+      .eq('user_login', companyName)
+      .eq('user_password', password)
+      .maybeSingle();
+
+    if (employee) {
+      // Create or get employee user account
+      const employeeEmail = `employee_${employee.id}@company.local`;
+      
+      let employeeAuth = await supabaseAuth.auth.signInWithPassword({
+        email: employeeEmail,
+        password,
+      });
+
+      if (employeeAuth.error) {
+        // Try to create employee user
+        const { data: newEmployeeUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
+          email: employeeEmail,
+          password,
+          email_confirm: true,
+        });
+
+        if (createError && createError.message.includes('already been registered')) {
+          // Update password for existing user
+          const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers();
+          const foundUser = existingUsers.users.find(u => u.email === employeeEmail);
+          
+          if (foundUser) {
+            await supabaseAdmin.auth.admin.updateUserById(foundUser.id, { password });
+            
+            employeeAuth = await supabaseAuth.auth.signInWithPassword({
+              email: employeeEmail,
+              password,
+            });
+            
+            if (employeeAuth.error) throw employeeAuth.error;
+            
+            return new Response(
+              JSON.stringify({
+                success: true,
+                role: 'user',
+                session: employeeAuth.data.session,
+              }),
+              {
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+                status: 200,
+              }
+            );
+          }
+        } else if (createError) {
+          throw createError;
+        } else if (newEmployeeUser) {
+          // Create profile and role for new employee user
+          await supabaseAdmin.from('profiles').insert({
+            id: newEmployeeUser.user.id,
+            company_id: employee.company_id,
+          });
+
+          await supabaseAdmin.from('user_roles').insert({
+            user_id: newEmployeeUser.user.id,
+            role: 'user',
+            company_id: employee.company_id,
+          });
+          
+          employeeAuth = await supabaseAuth.auth.signInWithPassword({
+            email: employeeEmail,
+            password,
+          });
+          
+          if (employeeAuth.error) throw employeeAuth.error;
+          
+          return new Response(
+            JSON.stringify({
+              success: true,
+              role: 'user',
+              session: employeeAuth.data.session,
+            }),
+            {
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+              status: 200,
+            }
+          );
+        }
+      }
+
+      // Employee signed in successfully
+      return new Response(
+        JSON.stringify({
+          success: true,
+          role: 'user',
+          session: employeeAuth.data.session,
+        }),
+        {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 200,
+        }
+      );
+    }
+
     throw new Error('Invalid credentials');
   } catch (error) {
     return new Response(
