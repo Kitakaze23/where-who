@@ -70,13 +70,13 @@ Deno.serve(async (req) => {
       // Try to sign in with existing user account first
       const userEmail = `${companyName}.user@company.local`;
       
-      const { data: userAuth, error: userError } = await supabaseAuth.auth.signInWithPassword({
+      let userAuth = await supabaseAuth.auth.signInWithPassword({
         email: userEmail,
         password,
       });
 
       // If user doesn't exist or password is wrong, create/update user
-      if (userError) {
+      if (userAuth.error) {
         // Try to create user
         const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
           email: userEmail,
@@ -95,18 +95,18 @@ Deno.serve(async (req) => {
             await supabaseAdmin.auth.admin.updateUserById(foundUser.id, { password });
             
             // Try to sign in again with new password
-            const { data: retryAuth, error: retryError } = await supabaseAuth.auth.signInWithPassword({
+            userAuth = await supabaseAuth.auth.signInWithPassword({
               email: userEmail,
               password,
             });
             
-            if (retryError) throw retryError;
+            if (userAuth.error) throw userAuth.error;
             
             return new Response(
               JSON.stringify({
                 success: true,
                 role: 'user',
-                session: retryAuth.session,
+                session: userAuth.data.session,
               }),
               {
                 headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -130,18 +130,18 @@ Deno.serve(async (req) => {
           });
           
           // Sign in with new user
-          const { data: newUserAuth, error: newUserError } = await supabaseAuth.auth.signInWithPassword({
+          userAuth = await supabaseAuth.auth.signInWithPassword({
             email: userEmail,
             password,
           });
           
-          if (newUserError) throw newUserError;
+          if (userAuth.error) throw userAuth.error;
           
           return new Response(
             JSON.stringify({
               success: true,
               role: 'user',
-              session: newUserAuth.session,
+              session: userAuth.data.session,
             }),
             {
               headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -156,7 +156,7 @@ Deno.serve(async (req) => {
         JSON.stringify({
           success: true,
           role: 'user',
-          session: userAuth.session,
+          session: userAuth.data.session,
         }),
         {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
