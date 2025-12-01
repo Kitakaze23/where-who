@@ -67,51 +67,91 @@ Deno.serve(async (req) => {
 
     // Check if password matches user password
     if (password === company.user_password) {
-      // Create temporary session for regular user
-      // We need to create or get existing user account
+      // Try to sign in with existing user account first
       const userEmail = `${companyName}.user@company.local`;
       
-      let userId: string;
-      const { data: existingUser } = await supabaseAdmin.auth.admin.listUsers();
-      const foundUser = existingUser.users.find(u => u.email === userEmail);
+      const { data: userAuth, error: userError } = await supabaseAuth.auth.signInWithPassword({
+        email: userEmail,
+        password,
+      });
 
-      if (foundUser) {
-        userId = foundUser.id;
-        // Update password
-        await supabaseAdmin.auth.admin.updateUserById(userId, { password });
-      } else {
-        // Create user
+      // If user doesn't exist or password is wrong, create/update user
+      if (userError) {
+        // Try to create user
         const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
           email: userEmail,
           password,
           email_confirm: true,
         });
 
-        if (createError) throw createError;
-        userId = newUser.user.id;
+        // If user already exists, update password
+        if (createError && createError.message.includes('already been registered')) {
+          // Get existing user by email
+          const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers();
+          const foundUser = existingUsers.users.find(u => u.email === userEmail);
+          
+          if (foundUser) {
+            // Update password
+            await supabaseAdmin.auth.admin.updateUserById(foundUser.id, { password });
+            
+            // Try to sign in again with new password
+            const { data: retryAuth, error: retryError } = await supabaseAuth.auth.signInWithPassword({
+              email: userEmail,
+              password,
+            });
+            
+            if (retryError) throw retryError;
+            
+            return new Response(
+              JSON.stringify({
+                success: true,
+                role: 'user',
+                session: retryAuth.session,
+              }),
+              {
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+                status: 200,
+              }
+            );
+          }
+        } else if (createError) {
+          throw createError;
+        } else if (newUser) {
+          // Create profile and role for new user
+          await supabaseAdmin.from('profiles').insert({
+            id: newUser.user.id,
+            company_id: company.id,
+          });
 
-        // Create profile
-        await supabaseAdmin.from('profiles').insert({
-          id: userId,
-          company_id: company.id,
-        });
-
-        // Create user role
-        await supabaseAdmin.from('user_roles').insert({
-          user_id: userId,
-          role: 'user',
-          company_id: company.id,
-        });
+          await supabaseAdmin.from('user_roles').insert({
+            user_id: newUser.user.id,
+            role: 'user',
+            company_id: company.id,
+          });
+          
+          // Sign in with new user
+          const { data: newUserAuth, error: newUserError } = await supabaseAuth.auth.signInWithPassword({
+            email: userEmail,
+            password,
+          });
+          
+          if (newUserError) throw newUserError;
+          
+          return new Response(
+            JSON.stringify({
+              success: true,
+              role: 'user',
+              session: newUserAuth.session,
+            }),
+            {
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+              status: 200,
+            }
+          );
+        }
       }
 
-      // Sign in as user
-      const { data: userAuth, error: userError } = await supabaseAuth.auth.signInWithPassword({
-        email: userEmail,
-        password,
-      });
-
-      if (userError) throw userError;
-
+      // If we reached here, user signed in successfully on first try
       return new Response(
         JSON.stringify({
           success: true,
