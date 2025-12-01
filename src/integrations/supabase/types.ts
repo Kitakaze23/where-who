@@ -24,7 +24,6 @@ export type Database = {
           last_name: string
           middle_name: string | null
           phone: string | null
-          position: string | null
           remote_days: string[] | null
           team: string | null
           updated_at: string
@@ -38,7 +37,6 @@ export type Database = {
           last_name: string
           middle_name?: string | null
           phone?: string | null
-          position?: string | null
           remote_days?: string[] | null
           team?: string | null
           updated_at?: string
@@ -52,7 +50,6 @@ export type Database = {
           last_name?: string
           middle_name?: string | null
           phone?: string | null
-          position?: string | null
           remote_days?: string[] | null
           team?: string | null
           updated_at?: string
