@@ -80,35 +80,50 @@ const Settings = () => {
   const [showSickLeaveDialog, setShowSickLeaveDialog] = useState(false);
   const [currentEmployeeId, setCurrentEmployeeId] = useState<string | null>(null);
 
-  const fetchEmployees = async () => {
-    const { data } = await supabase.from("employees").select("*").order("last_name");
-    if (data) setEmployees(data);
-  };
+  const fetchData = async () => {
+    const [employeesData, vacationsData, sickLeavesData, settingsData] = await Promise.all([
+      supabase.from("employees").select("*").order("last_name"),
+      supabase.from("vacation_periods").select("*"),
+      supabase.from("sick_leave_periods").select("*"),
+      supabase.from("settings").select("*").eq("setting_key", "total_desks").maybeSingle(),
+    ]);
 
-  const fetchVacations = async () => {
-    const { data } = await supabase.from("vacation_periods").select("*");
-    if (data) setVacations(data);
-  };
-
-  const fetchSickLeaves = async () => {
-    const { data } = await supabase.from("sick_leave_periods").select("*");
-    if (data) setSickLeaves(data);
-  };
-
-  const fetchSettings = async () => {
-    const { data } = await supabase
-      .from("settings")
-      .select("*")
-      .eq("setting_key", "total_desks")
-      .single();
-    if (data) setTotalDesks(parseInt(data.setting_value));
+    if (employeesData.data) setEmployees(employeesData.data);
+    if (vacationsData.data) setVacations(vacationsData.data);
+    if (sickLeavesData.data) setSickLeaves(sickLeavesData.data);
+    if (settingsData.data) setTotalDesks(parseInt(settingsData.data.setting_value));
   };
 
   useEffect(() => {
-    fetchEmployees();
-    fetchVacations();
-    fetchSickLeaves();
-    fetchSettings();
+    fetchData();
+
+    // Subscribe to real-time changes
+    const employeesChannel = supabase
+      .channel("settings-employees-changes")
+      .on("postgres_changes", { event: "*", schema: "public", table: "employees" }, fetchData)
+      .subscribe();
+
+    const vacationsChannel = supabase
+      .channel("settings-vacations-changes")
+      .on("postgres_changes", { event: "*", schema: "public", table: "vacation_periods" }, fetchData)
+      .subscribe();
+
+    const sickLeavesChannel = supabase
+      .channel("settings-sick-leaves-changes")
+      .on("postgres_changes", { event: "*", schema: "public", table: "sick_leave_periods" }, fetchData)
+      .subscribe();
+
+    const settingsChannel = supabase
+      .channel("settings-settings-changes")
+      .on("postgres_changes", { event: "*", schema: "public", table: "settings" }, fetchData)
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(employeesChannel);
+      supabase.removeChannel(vacationsChannel);
+      supabase.removeChannel(sickLeavesChannel);
+      supabase.removeChannel(settingsChannel);
+    };
   }, []);
 
   const resetForm = () => {
@@ -170,7 +185,6 @@ const Settings = () => {
           start_date: vacationForm.start_date,
           end_date: vacationForm.end_date,
         });
-        fetchVacations();
       }
 
       // Add sick leave period if provided
@@ -180,13 +194,11 @@ const Settings = () => {
           start_date: sickLeaveForm.start_date,
           end_date: sickLeaveForm.end_date,
         });
-        fetchSickLeaves();
       }
 
       toast.success("Сотрудник успешно добавлен");
     }
 
-    fetchEmployees();
     resetForm();
   };
 
@@ -216,7 +228,6 @@ const Settings = () => {
     }
 
     toast.success("Сотрудник успешно удалён");
-    fetchEmployees();
   };
 
   const toggleRemoteDay = (day: string) => {
@@ -243,7 +254,6 @@ const Settings = () => {
       return;
     }
     toast.success("Отпуск удалён");
-    fetchVacations();
   };
 
   const deleteSickLeave = async (sickLeaveId: string) => {
@@ -253,7 +263,6 @@ const Settings = () => {
       return;
     }
     toast.success("Больничный удалён");
-    fetchSickLeaves();
   };
 
   const handleAddVacation = async () => {
@@ -274,7 +283,6 @@ const Settings = () => {
     setVacationForm({ start_date: "", end_date: "" });
     setShowVacationDialog(false);
     setEditingVacationId(null);
-    fetchVacations();
   };
 
   const handleUpdateVacation = async () => {
@@ -297,7 +305,6 @@ const Settings = () => {
     setVacationForm({ start_date: "", end_date: "" });
     setEditingVacationId(null);
     setShowVacationDialog(false);
-    fetchVacations();
   };
 
   const handleAddSickLeave = async () => {
@@ -318,7 +325,6 @@ const Settings = () => {
     setSickLeaveForm({ start_date: "", end_date: "" });
     setShowSickLeaveDialog(false);
     setEditingSickLeaveId(null);
-    fetchSickLeaves();
   };
 
   const handleUpdateSickLeave = async () => {
@@ -341,7 +347,6 @@ const Settings = () => {
     setSickLeaveForm({ start_date: "", end_date: "" });
     setEditingSickLeaveId(null);
     setShowSickLeaveDialog(false);
-    fetchSickLeaves();
   };
 
   const openAddVacationDialog = (employeeId: string) => {
@@ -379,10 +384,23 @@ const Settings = () => {
   };
 
   const handleUpdateTotalDesks = async () => {
-    const { error } = await supabase
+    const { data: existingSetting } = await supabase
       .from("settings")
-      .update({ setting_value: totalDesks.toString() })
-      .eq("setting_key", "total_desks");
+      .select("*")
+      .eq("setting_key", "total_desks")
+      .maybeSingle();
+
+    let error;
+    if (existingSetting) {
+      ({ error } = await supabase
+        .from("settings")
+        .update({ setting_value: totalDesks.toString() })
+        .eq("setting_key", "total_desks"));
+    } else {
+      ({ error } = await supabase
+        .from("settings")
+        .insert({ setting_key: "total_desks", setting_value: totalDesks.toString() }));
+    }
     
     if (error) {
       toast.error("Ошибка при обновлении количества столов");
@@ -432,7 +450,7 @@ const Settings = () => {
                 <Button 
                   onClick={() => {
                     setIsEditingDesks(false);
-                    fetchSettings();
+                    fetchData();
                   }} 
                   variant="outline"
                 >

@@ -161,7 +161,7 @@ const Dashboard = () => {
         .from("settings")
         .select("*")
         .eq("setting_key", "total_desks")
-        .single();
+        .maybeSingle();
 
       if (employeesData) setEmployees(employeesData);
       if (vacationsData) setVacations(vacationsData);
