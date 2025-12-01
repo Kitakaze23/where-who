@@ -51,7 +51,7 @@ const Settings = () => {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [vacations, setVacations] = useState<VacationPeriod[]>([]);
   const [sickLeaves, setSickLeaves] = useState<SickLeavePeriod[]>([]);
-  const [totalDesks, setTotalDesks] = useState<number>(50);
+  const [totalDesks, setTotalDesks] = useState<number>(0);
   const [isEditingDesks, setIsEditingDesks] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
