@@ -76,7 +76,9 @@ const Settings = () => {
   });
   const [editingVacationId, setEditingVacationId] = useState<string | null>(null);
   const [editingSickLeaveId, setEditingSickLeaveId] = useState<string | null>(null);
-  const [managingPeriodsFor, setManagingPeriodsFor] = useState<string | null>(null);
+  const [showVacationDialog, setShowVacationDialog] = useState(false);
+  const [showSickLeaveDialog, setShowSickLeaveDialog] = useState(false);
+  const [currentEmployeeId, setCurrentEmployeeId] = useState<string | null>(null);
 
   const fetchEmployees = async () => {
     const { data } = await supabase.from("employees").select("*").order("last_name");
@@ -254,13 +256,13 @@ const Settings = () => {
     fetchSickLeaves();
   };
 
-  const handleAddVacation = async (employeeId: string) => {
-    if (!vacationForm.start_date || !vacationForm.end_date) {
+  const handleAddVacation = async () => {
+    if (!currentEmployeeId || !vacationForm.start_date || !vacationForm.end_date) {
       toast.error("Укажите даты отпуска");
       return;
     }
     const { error } = await supabase.from("vacation_periods").insert({
-      employee_id: employeeId,
+      employee_id: currentEmployeeId,
       start_date: vacationForm.start_date,
       end_date: vacationForm.end_date,
     });
@@ -270,11 +272,13 @@ const Settings = () => {
     }
     toast.success("Отпуск добавлен");
     setVacationForm({ start_date: "", end_date: "" });
+    setShowVacationDialog(false);
+    setEditingVacationId(null);
     fetchVacations();
   };
 
-  const handleUpdateVacation = async (vacationId: string) => {
-    if (!vacationForm.start_date || !vacationForm.end_date) {
+  const handleUpdateVacation = async () => {
+    if (!editingVacationId || !vacationForm.start_date || !vacationForm.end_date) {
       toast.error("Укажите даты отпуска");
       return;
     }
@@ -284,7 +288,7 @@ const Settings = () => {
         start_date: vacationForm.start_date,
         end_date: vacationForm.end_date,
       })
-      .eq("id", vacationId);
+      .eq("id", editingVacationId);
     if (error) {
       toast.error("Ошибка при обновлении отпуска");
       return;
@@ -292,16 +296,17 @@ const Settings = () => {
     toast.success("Отпуск обновлён");
     setVacationForm({ start_date: "", end_date: "" });
     setEditingVacationId(null);
+    setShowVacationDialog(false);
     fetchVacations();
   };
 
-  const handleAddSickLeave = async (employeeId: string) => {
-    if (!sickLeaveForm.start_date || !sickLeaveForm.end_date) {
+  const handleAddSickLeave = async () => {
+    if (!currentEmployeeId || !sickLeaveForm.start_date || !sickLeaveForm.end_date) {
       toast.error("Укажите даты больничного");
       return;
     }
     const { error } = await supabase.from("sick_leave_periods").insert({
-      employee_id: employeeId,
+      employee_id: currentEmployeeId,
       start_date: sickLeaveForm.start_date,
       end_date: sickLeaveForm.end_date,
     });
@@ -311,11 +316,13 @@ const Settings = () => {
     }
     toast.success("Больничный добавлен");
     setSickLeaveForm({ start_date: "", end_date: "" });
+    setShowSickLeaveDialog(false);
+    setEditingSickLeaveId(null);
     fetchSickLeaves();
   };
 
-  const handleUpdateSickLeave = async (sickLeaveId: string) => {
-    if (!sickLeaveForm.start_date || !sickLeaveForm.end_date) {
+  const handleUpdateSickLeave = async () => {
+    if (!editingSickLeaveId || !sickLeaveForm.start_date || !sickLeaveForm.end_date) {
       toast.error("Укажите даты больничного");
       return;
     }
@@ -325,7 +332,7 @@ const Settings = () => {
         start_date: sickLeaveForm.start_date,
         end_date: sickLeaveForm.end_date,
       })
-      .eq("id", sickLeaveId);
+      .eq("id", editingSickLeaveId);
     if (error) {
       toast.error("Ошибка при обновлении больничного");
       return;
@@ -333,30 +340,42 @@ const Settings = () => {
     toast.success("Больничный обновлён");
     setSickLeaveForm({ start_date: "", end_date: "" });
     setEditingSickLeaveId(null);
+    setShowSickLeaveDialog(false);
     fetchSickLeaves();
   };
 
-  const startEditingVacation = (vacation: VacationPeriod) => {
+  const openAddVacationDialog = (employeeId: string) => {
+    setCurrentEmployeeId(employeeId);
+    setEditingVacationId(null);
+    setVacationForm({ start_date: "", end_date: "" });
+    setShowVacationDialog(true);
+  };
+
+  const openEditVacationDialog = (vacation: VacationPeriod) => {
+    setCurrentEmployeeId(vacation.employee_id);
     setVacationForm({
       start_date: vacation.start_date,
       end_date: vacation.end_date,
     });
     setEditingVacationId(vacation.id);
+    setShowVacationDialog(true);
   };
 
-  const startEditingSickLeave = (sickLeave: SickLeavePeriod) => {
+  const openAddSickLeaveDialog = (employeeId: string) => {
+    setCurrentEmployeeId(employeeId);
+    setEditingSickLeaveId(null);
+    setSickLeaveForm({ start_date: "", end_date: "" });
+    setShowSickLeaveDialog(true);
+  };
+
+  const openEditSickLeaveDialog = (sickLeave: SickLeavePeriod) => {
+    setCurrentEmployeeId(sickLeave.employee_id);
     setSickLeaveForm({
       start_date: sickLeave.start_date,
       end_date: sickLeave.end_date,
     });
     setEditingSickLeaveId(sickLeave.id);
-  };
-
-  const cancelEditingPeriod = () => {
-    setVacationForm({ start_date: "", end_date: "" });
-    setSickLeaveForm({ start_date: "", end_date: "" });
-    setEditingVacationId(null);
-    setEditingSickLeaveId(null);
+    setShowSickLeaveDialog(true);
   };
 
   const handleUpdateTotalDesks = async () => {
@@ -657,12 +676,10 @@ const Settings = () => {
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => {
-                              setManagingPeriodsFor(employee.id);
-                              cancelEditingPeriod();
-                            }}
+                            onClick={() => openAddVacationDialog(employee.id)}
                           >
-                            {managingPeriodsFor === employee.id ? "Скрыть" : "Управление"}
+                            <Plus className="h-3 w-3 mr-1" />
+                            Добавить
                           </Button>
                         </div>
                         
@@ -671,195 +688,69 @@ const Settings = () => {
                             key={vacation.id}
                             className="flex items-center justify-between gap-2 rounded-lg bg-muted p-2"
                           >
-                            {editingVacationId === vacation.id ? (
-                              <div className="flex-1 space-y-2">
-                                <div className="flex gap-2">
-                                  <Input
-                                    type="date"
-                                    value={vacationForm.start_date}
-                                    onChange={(e) =>
-                                      setVacationForm({ ...vacationForm, start_date: e.target.value })
-                                    }
-                                  />
-                                  <Input
-                                    type="date"
-                                    value={vacationForm.end_date}
-                                    onChange={(e) =>
-                                      setVacationForm({ ...vacationForm, end_date: e.target.value })
-                                    }
-                                  />
-                                </div>
-                                <div className="flex gap-2">
-                                  <Button
-                                    size="sm"
-                                    onClick={() => handleUpdateVacation(vacation.id)}
-                                  >
-                                    Сохранить
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={cancelEditingPeriod}
-                                  >
-                                    Отмена
-                                  </Button>
-                                </div>
-                              </div>
-                            ) : (
-                              <>
-                                <span className="text-sm">
-                                  {format(new Date(vacation.start_date), "dd.MM.yyyy")} —{" "}
-                                  {format(new Date(vacation.end_date), "dd.MM.yyyy")}
-                                </span>
-                                <div className="flex gap-1">
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    onClick={() => startEditingVacation(vacation)}
-                                  >
-                                    <Pencil className="h-3 w-3" />
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    onClick={() => deleteVacation(vacation.id)}
-                                  >
-                                    <Trash2 className="h-3 w-3" />
-                                  </Button>
-                                </div>
-                              </>
-                            )}
+                            <span className="text-sm">
+                              {format(new Date(vacation.start_date), "dd.MM.yyyy")} —{" "}
+                              {format(new Date(vacation.end_date), "dd.MM.yyyy")}
+                            </span>
+                            <div className="flex gap-1">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => openEditVacationDialog(vacation)}
+                              >
+                                <Pencil className="h-3 w-3" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => deleteVacation(vacation.id)}
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            </div>
                           </div>
                         ))}
-
-                        {managingPeriodsFor === employee.id && !editingVacationId && (
-                          <div className="space-y-2 rounded-lg border p-3">
-                            <p className="text-sm font-medium">Добавить новый отпуск:</p>
-                            <div className="flex gap-2">
-                              <Input
-                                type="date"
-                                placeholder="С даты"
-                                value={vacationForm.start_date}
-                                onChange={(e) =>
-                                  setVacationForm({ ...vacationForm, start_date: e.target.value })
-                                }
-                              />
-                              <Input
-                                type="date"
-                                placeholder="По дату"
-                                value={vacationForm.end_date}
-                                onChange={(e) =>
-                                  setVacationForm({ ...vacationForm, end_date: e.target.value })
-                                }
-                              />
-                            </div>
-                            <Button
-                              size="sm"
-                              onClick={() => handleAddVacation(employee.id)}
-                            >
-                              Добавить отпуск
-                            </Button>
-                          </div>
-                        )}
                       </div>
 
                       <div className="space-y-2">
-                        <p className="font-medium">Больничные:</p>
+                        <div className="flex items-center justify-between">
+                          <p className="font-medium">Больничные:</p>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => openAddSickLeaveDialog(employee.id)}
+                          >
+                            <Plus className="h-3 w-3 mr-1" />
+                            Добавить
+                          </Button>
+                        </div>
                         {employeeSickLeaves.map((sickLeave) => (
                           <div
                             key={sickLeave.id}
                             className="flex items-center justify-between gap-2 rounded-lg bg-muted p-2"
                           >
-                            {editingSickLeaveId === sickLeave.id ? (
-                              <div className="flex-1 space-y-2">
-                                <div className="flex gap-2">
-                                  <Input
-                                    type="date"
-                                    value={sickLeaveForm.start_date}
-                                    onChange={(e) =>
-                                      setSickLeaveForm({ ...sickLeaveForm, start_date: e.target.value })
-                                    }
-                                  />
-                                  <Input
-                                    type="date"
-                                    value={sickLeaveForm.end_date}
-                                    onChange={(e) =>
-                                      setSickLeaveForm({ ...sickLeaveForm, end_date: e.target.value })
-                                    }
-                                  />
-                                </div>
-                                <div className="flex gap-2">
-                                  <Button
-                                    size="sm"
-                                    onClick={() => handleUpdateSickLeave(sickLeave.id)}
-                                  >
-                                    Сохранить
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={cancelEditingPeriod}
-                                  >
-                                    Отмена
-                                  </Button>
-                                </div>
-                              </div>
-                            ) : (
-                              <>
-                                <span className="text-sm">
-                                  {format(new Date(sickLeave.start_date), "dd.MM.yyyy")} —{" "}
-                                  {format(new Date(sickLeave.end_date), "dd.MM.yyyy")}
-                                </span>
-                                <div className="flex gap-1">
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    onClick={() => startEditingSickLeave(sickLeave)}
-                                  >
-                                    <Pencil className="h-3 w-3" />
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    onClick={() => deleteSickLeave(sickLeave.id)}
-                                  >
-                                    <Trash2 className="h-3 w-3" />
-                                  </Button>
-                                </div>
-                              </>
-                            )}
+                            <span className="text-sm">
+                              {format(new Date(sickLeave.start_date), "dd.MM.yyyy")} —{" "}
+                              {format(new Date(sickLeave.end_date), "dd.MM.yyyy")}
+                            </span>
+                            <div className="flex gap-1">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => openEditSickLeaveDialog(sickLeave)}
+                              >
+                                <Pencil className="h-3 w-3" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => deleteSickLeave(sickLeave.id)}
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            </div>
                           </div>
                         ))}
-
-                        {managingPeriodsFor === employee.id && !editingSickLeaveId && (
-                          <div className="space-y-2 rounded-lg border p-3">
-                            <p className="text-sm font-medium">Добавить новый больничный:</p>
-                            <div className="flex gap-2">
-                              <Input
-                                type="date"
-                                placeholder="С даты"
-                                value={sickLeaveForm.start_date}
-                                onChange={(e) =>
-                                  setSickLeaveForm({ ...sickLeaveForm, start_date: e.target.value })
-                                }
-                              />
-                              <Input
-                                type="date"
-                                placeholder="По дату"
-                                value={sickLeaveForm.end_date}
-                                onChange={(e) =>
-                                  setSickLeaveForm({ ...sickLeaveForm, end_date: e.target.value })
-                                }
-                              />
-                            </div>
-                            <Button
-                              size="sm"
-                              onClick={() => handleAddSickLeave(employee.id)}
-                            >
-                              Добавить больничный
-                            </Button>
-                          </div>
-                        )}
                       </div>
                     </div>
 
@@ -887,6 +778,110 @@ const Settings = () => {
             </Card>
           )}
         </div>
+
+        {/* Vacation Dialog */}
+        <Dialog open={showVacationDialog} onOpenChange={setShowVacationDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>
+                {editingVacationId ? "Редактировать отпуск" : "Добавить отпуск"}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="vacation_start">С даты</Label>
+                <Input
+                  id="vacation_start"
+                  type="date"
+                  value={vacationForm.start_date}
+                  onChange={(e) =>
+                    setVacationForm({ ...vacationForm, start_date: e.target.value })
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="vacation_end">По дату</Label>
+                <Input
+                  id="vacation_end"
+                  type="date"
+                  value={vacationForm.end_date}
+                  onChange={(e) =>
+                    setVacationForm({ ...vacationForm, end_date: e.target.value })
+                  }
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  onClick={() => editingVacationId ? handleUpdateVacation() : handleAddVacation()}
+                >
+                  {editingVacationId ? "Сохранить" : "Добавить"}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowVacationDialog(false);
+                    setVacationForm({ start_date: "", end_date: "" });
+                    setEditingVacationId(null);
+                  }}
+                >
+                  Отмена
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Sick Leave Dialog */}
+        <Dialog open={showSickLeaveDialog} onOpenChange={setShowSickLeaveDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>
+                {editingSickLeaveId ? "Редактировать больничный" : "Добавить больничный"}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="sick_leave_start">С даты</Label>
+                <Input
+                  id="sick_leave_start"
+                  type="date"
+                  value={sickLeaveForm.start_date}
+                  onChange={(e) =>
+                    setSickLeaveForm({ ...sickLeaveForm, start_date: e.target.value })
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="sick_leave_end">По дату</Label>
+                <Input
+                  id="sick_leave_end"
+                  type="date"
+                  value={sickLeaveForm.end_date}
+                  onChange={(e) =>
+                    setSickLeaveForm({ ...sickLeaveForm, end_date: e.target.value })
+                  }
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  onClick={() => editingSickLeaveId ? handleUpdateSickLeave() : handleAddSickLeave()}
+                >
+                  {editingSickLeaveId ? "Сохранить" : "Добавить"}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowSickLeaveDialog(false);
+                    setSickLeaveForm({ start_date: "", end_date: "" });
+                    setEditingSickLeaveId(null);
+                  }}
+                >
+                  Отмена
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );
