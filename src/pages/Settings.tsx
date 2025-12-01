@@ -5,7 +5,8 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Pencil, Trash2, X } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Plus, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 
@@ -14,6 +15,7 @@ type Employee = {
   first_name: string;
   last_name: string;
   middle_name: string | null;
+  position: string | null;
   team: string | null;
   desk_number: number | null;
   phone: string | null;
@@ -57,6 +59,7 @@ const Settings = () => {
     first_name: "",
     last_name: "",
     middle_name: "",
+    position: "",
     team: "",
     desk_number: "",
     phone: "",
@@ -111,6 +114,7 @@ const Settings = () => {
       first_name: "",
       last_name: "",
       middle_name: "",
+      position: "",
       team: "",
       desk_number: "",
       phone: "",
@@ -130,6 +134,7 @@ const Settings = () => {
       first_name: formData.first_name,
       last_name: formData.last_name,
       middle_name: formData.middle_name || null,
+      position: formData.position || null,
       team: formData.team || null,
       desk_number: formData.desk_number ? parseInt(formData.desk_number) : null,
       phone: formData.phone || null,
@@ -188,6 +193,7 @@ const Settings = () => {
       first_name: employee.first_name,
       last_name: employee.last_name,
       middle_name: employee.middle_name || "",
+      position: employee.position || "",
       team: employee.team || "",
       desk_number: employee.desk_number?.toString() || "",
       phone: employee.phone || "",
@@ -373,9 +379,9 @@ const Settings = () => {
       <div className="mx-auto max-w-7xl space-y-8">
         <div className="flex items-center justify-between">
           <h1 className="text-4xl font-bold text-foreground">Настройки сотрудников</h1>
-          <Button onClick={() => setShowForm(!showForm)} className="gap-2">
-            {showForm ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-            {showForm ? "Отмена" : "Добавить сотрудника"}
+          <Button onClick={() => setShowForm(true)} className="gap-2">
+            <Plus className="h-4 w-4" />
+            Добавить сотрудника
           </Button>
         </div>
 
@@ -418,11 +424,13 @@ const Settings = () => {
           </div>
         </Card>
 
-        {showForm && (
-          <Card className="p-6">
-            <h2 className="mb-4 text-2xl font-semibold">
-              {editingId ? "Редактировать сотрудника" : "Добавить нового сотрудника"}
-            </h2>
+        <Dialog open={showForm} onOpenChange={setShowForm}>
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>
+                {editingId ? "Редактировать сотрудника" : "Добавить нового сотрудника"}
+              </DialogTitle>
+            </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="grid gap-4 md:grid-cols-3">
                 <div className="space-y-2">
@@ -453,7 +461,16 @@ const Settings = () => {
                 </div>
               </div>
 
-              <div className="grid gap-4 md:grid-cols-4">
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="position">Должность</Label>
+                  <Input
+                    id="position"
+                    value={formData.position}
+                    onChange={(e) => setFormData({ ...formData, position: e.target.value })}
+                    placeholder="Должность сотрудника"
+                  />
+                </div>
                 <div className="space-y-2">
                   <Label htmlFor="team">Команда</Label>
                   <Input
@@ -463,6 +480,9 @@ const Settings = () => {
                     placeholder="Название команды"
                   />
                 </div>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-3">
                 <div className="space-y-2">
                   <Label htmlFor="desk_number">Номер стола</Label>
                   <Input
@@ -576,8 +596,8 @@ const Settings = () => {
                 </Button>
               </div>
             </form>
-          </Card>
-        )}
+          </DialogContent>
+        </Dialog>
 
         <div className="space-y-4">
           <h2 className="text-2xl font-semibold">Список сотрудников</h2>
@@ -594,6 +614,12 @@ const Settings = () => {
                           {employee.last_name} {employee.first_name} {employee.middle_name}
                         </h3>
                         <div className="mt-2 grid gap-2 text-sm md:grid-cols-2">
+                          {employee.position && (
+                            <p>
+                              <span className="text-muted-foreground">Должность:</span>{" "}
+                              {employee.position}
+                            </p>
+                          )}
                           {employee.team && (
                             <p>
                               <span className="text-muted-foreground">Команда:</span>{" "}
