@@ -26,6 +26,22 @@ const Seating = () => {
   useEffect(() => {
     fetchEmployees();
     fetchLayout();
+
+    // Subscribe to real-time changes
+    const employeesChannel = supabase
+      .channel("seating-employees-changes")
+      .on("postgres_changes", { event: "*", schema: "public", table: "employees" }, fetchEmployees)
+      .subscribe();
+
+    const layoutChannel = supabase
+      .channel("seating-layout-changes")
+      .on("postgres_changes", { event: "*", schema: "public", table: "office_layout" }, fetchLayout)
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(employeesChannel);
+      supabase.removeChannel(layoutChannel);
+    };
   }, []);
 
   const fetchEmployees = async () => {
