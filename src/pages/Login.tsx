@@ -41,6 +41,10 @@ const Login = () => {
         throw new Error(data.error);
       }
 
+      if (!data.session || !data.session.access_token) {
+        throw new Error("Не удалось получить данные сессии");
+      }
+
       // Set session
       await supabase.auth.setSession(data.session);
 
