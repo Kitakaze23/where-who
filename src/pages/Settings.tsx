@@ -6,9 +6,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Plus, Pencil, Trash2 } from "lucide-react";
+import { Plus, Pencil, Trash2, Key } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
+import { useAuth } from "@/hooks/useAuth";
 
 type Employee = {
   id: string;
@@ -48,6 +49,7 @@ const WEEKDAYS = [
 ];
 
 const Settings = () => {
+  const { user } = useAuth();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [vacations, setVacations] = useState<VacationPeriod[]>([]);
   const [sickLeaves, setSickLeaves] = useState<SickLeavePeriod[]>([]);
@@ -79,6 +81,10 @@ const Settings = () => {
   const [showVacationDialog, setShowVacationDialog] = useState(false);
   const [showSickLeaveDialog, setShowSickLeaveDialog] = useState(false);
   const [currentEmployeeId, setCurrentEmployeeId] = useState<string | null>(null);
+  const [companyName, setCompanyName] = useState<string>("");
+  const [userPassword, setUserPassword] = useState<string>("");
+  const [showUserAccessDialog, setShowUserAccessDialog] = useState(false);
+  const [newUserPassword, setNewUserPassword] = useState<string>("");
 
   const fetchData = async () => {
     const [employeesData, vacationsData, sickLeavesData, settingsData] = await Promise.all([
@@ -94,8 +100,32 @@ const Settings = () => {
     if (settingsData.data) setTotalDesks(parseInt(settingsData.data.setting_value));
   };
 
+  const fetchCompanyInfo = async () => {
+    if (!user) return;
+    
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("company_id")
+      .eq("id", user.id)
+      .single();
+
+    if (profile) {
+      const { data: company } = await supabase
+        .from("companies")
+        .select("name, user_password")
+        .eq("id", profile.company_id)
+        .single();
+
+      if (company) {
+        setCompanyName(company.name);
+        setUserPassword(company.user_password);
+      }
+    }
+  };
+
   useEffect(() => {
     fetchData();
+    fetchCompanyInfo();
 
     // Subscribe to real-time changes
     const employeesChannel = supabase
@@ -124,7 +154,7 @@ const Settings = () => {
       supabase.removeChannel(sickLeavesChannel);
       supabase.removeChannel(settingsChannel);
     };
-  }, []);
+  }, [user]);
 
   const resetForm = () => {
     setFormData({
@@ -411,6 +441,46 @@ const Settings = () => {
     setIsEditingDesks(false);
   };
 
+  const handleUpdateUserPassword = async () => {
+    if (!newUserPassword || newUserPassword.trim().length === 0) {
+      toast.error("Введите пароль");
+      return;
+    }
+
+    if (newUserPassword.length < 6) {
+      toast.error("Пароль должен содержать минимум 6 символов");
+      return;
+    }
+
+    if (!user) return;
+
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("company_id")
+      .eq("id", user.id)
+      .single();
+
+    if (!profile) {
+      toast.error("Ошибка при получении данных компании");
+      return;
+    }
+
+    const { error } = await supabase
+      .from("companies")
+      .update({ user_password: newUserPassword })
+      .eq("id", profile.company_id);
+
+    if (error) {
+      toast.error("Ошибка при обновлении пароля");
+      return;
+    }
+
+    setUserPassword(newUserPassword);
+    setNewUserPassword("");
+    setShowUserAccessDialog(false);
+    toast.success("Пароль пользователей обновлен");
+  };
+
   return (
     <div className="min-h-screen bg-background p-6">
       <div className="mx-auto max-w-7xl space-y-8">
@@ -458,6 +528,42 @@ const Settings = () => {
                 </Button>
               </div>
             )}
+          </div>
+        </Card>
+
+        {/* User Access Settings */}
+        <Card className="p-6">
+          <h2 className="mb-4 text-2xl font-semibold">Доступ для пользователей</h2>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Пользователи с этими учетными данными могут просматривать Дашборд и Рассадку
+            </p>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Логин</Label>
+                <Input value={companyName} disabled className="bg-muted" />
+              </div>
+              <div className="space-y-2">
+                <Label>Пароль</Label>
+                <Input 
+                  value={userPassword} 
+                  disabled 
+                  type="password" 
+                  className="bg-muted" 
+                />
+              </div>
+            </div>
+            <Button 
+              onClick={() => {
+                setNewUserPassword("");
+                setShowUserAccessDialog(true);
+              }} 
+              variant="outline"
+              className="gap-2"
+            >
+              <Key className="h-4 w-4" />
+              Изменить пароль пользователей
+            </Button>
           </div>
         </Card>
 
@@ -892,6 +998,54 @@ const Settings = () => {
                     setShowSickLeaveDialog(false);
                     setSickLeaveForm({ start_date: "", end_date: "" });
                     setEditingSickLeaveId(null);
+                  }}
+                >
+                  Отмена
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* User Access Dialog */}
+        <Dialog open={showUserAccessDialog} onOpenChange={setShowUserAccessDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Изменить пароль для пользователей</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="company_name_display">Логин (название компании)</Label>
+                <Input
+                  id="company_name_display"
+                  value={companyName}
+                  disabled
+                  className="bg-muted"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="new_user_password">Новый пароль *</Label>
+                <Input
+                  id="new_user_password"
+                  type="password"
+                  value={newUserPassword}
+                  onChange={(e) => setNewUserPassword(e.target.value)}
+                  placeholder="Минимум 6 символов"
+                  minLength={6}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Этот пароль будут использовать обычные пользователи для входа в систему
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <Button onClick={handleUpdateUserPassword}>
+                  Сохранить
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowUserAccessDialog(false);
+                    setNewUserPassword("");
                   }}
                 >
                   Отмена
