@@ -11,6 +11,7 @@ type Employee = {
   first_name: string;
   last_name: string;
   middle_name: string | null;
+  position: string | null;
   team: string | null;
   desk_number: number | null;
   phone: string | null;
@@ -372,6 +373,9 @@ const Dashboard = () => {
                       </h3>
                       {employee.middle_name && (
                         <p className="text-sm text-muted-foreground">{employee.middle_name}</p>
+                      )}
+                      {employee.position && (
+                        <p className="text-sm text-muted-foreground mt-1">{employee.position}</p>
                       )}
                       {employee.team && (
                         <p className="text-sm text-muted-foreground mt-1">Команда: {employee.team}</p>
