@@ -3,8 +3,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Users, Home, Wifi, Plane, Cake, Heart } from "lucide-react";
-import { format, isWithinInterval, addDays, isBefore, isAfter } from "date-fns";
+import { format, isWithinInterval, addDays, isBefore, isAfter, startOfWeek, endOfWeek, eachDayOfInterval } from "date-fns";
 import { ru } from "date-fns/locale";
+import { DeskReservationDialog } from "@/components/DeskReservationDialog";
 
 type Employee = {
   id: string;
@@ -35,6 +36,14 @@ type SickLeavePeriod = {
 
 type EmployeeStatus = "office" | "remote" | "vacation" | "sick_leave" | "upcoming_vacation";
 
+type DeskReservation = {
+  id: string;
+  employee_id: string;
+  desk_number: number;
+  start_date: string;
+  end_date: string;
+};
+
 const Dashboard = () => {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [vacations, setVacations] = useState<VacationPeriod[]>([]);
@@ -42,6 +51,7 @@ const Dashboard = () => {
   const [filter, setFilter] = useState<EmployeeStatus | "all">("all");
   const [teamFilter, setTeamFilter] = useState<string | "all">("all");
   const [totalDesks, setTotalDesks] = useState<number>(0);
+  const [reservations, setReservations] = useState<DeskReservation[]>([]);
 
   const getDayName = (date: Date) => {
     const days = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
@@ -152,11 +162,21 @@ const Dashboard = () => {
     return (thisYearBirthday >= today) && (thisYearBirthday <= fiveDaysFromNow);
   };
 
+  const getReservedDeskForDate = (employeeId: string, date: Date): number | null => {
+    const dateStr = format(date, "yyyy-MM-dd");
+    const reservation = reservations.find((r) => {
+      if (r.employee_id !== employeeId) return false;
+      return dateStr >= r.start_date && dateStr <= r.end_date;
+    });
+    return reservation ? reservation.desk_number : null;
+  };
+
   useEffect(() => {
     const fetchData = async () => {
       const { data: employeesData } = await supabase.from("employees").select("*").order("last_name");
       const { data: vacationsData } = await supabase.from("vacation_periods").select("*");
       const { data: sickLeavesData } = await supabase.from("sick_leave_periods").select("*");
+      const { data: reservationsData } = await supabase.from("desk_reservations").select("*");
       const { data: settingsData } = await supabase
         .from("settings")
         .select("*")
@@ -166,6 +186,7 @@ const Dashboard = () => {
       if (employeesData) setEmployees(employeesData);
       if (vacationsData) setVacations(vacationsData);
       if (sickLeavesData) setSickLeaves(sickLeavesData);
+      if (reservationsData) setReservations(reservationsData);
       if (settingsData) setTotalDesks(parseInt(settingsData.setting_value));
     };
 
@@ -200,11 +221,19 @@ const Dashboard = () => {
       })
       .subscribe();
 
+    const reservationsChannel = supabase
+      .channel("reservations-changes")
+      .on("postgres_changes", { event: "*", schema: "public", table: "desk_reservations" }, () => {
+        fetchData();
+      })
+      .subscribe();
+
     return () => {
       supabase.removeChannel(employeesChannel);
       supabase.removeChannel(vacationsChannel);
       supabase.removeChannel(sickLeavesChannel);
       supabase.removeChannel(settingsChannel);
+      supabase.removeChannel(reservationsChannel);
     };
   }, []);
 
@@ -230,9 +259,11 @@ const Dashboard = () => {
   });
 
   const today = new Date();
-  const tomorrow = addDays(today, 1);
-  const availableDesksToday = getAvailableDesksCount(today);
-  const availableDesksTomorrow = getAvailableDesksCount(tomorrow);
+  
+  // Generate 2 weeks of dates starting from today
+  const twoWeeksStart = today;
+  const twoWeeksEnd = addDays(today, 13); // 2 weeks = 14 days
+  const twoWeeksDates = eachDayOfInterval({ start: twoWeeksStart, end: twoWeeksEnd });
 
   return (
     <div className="min-h-screen bg-background p-6">
@@ -248,27 +279,39 @@ const Dashboard = () => {
           <Users className="h-12 w-12 text-primary" />
         </div>
 
-        {/* Available Desks */}
-        <div className="grid gap-4 md:grid-cols-2">
-          <Card className="p-6 bg-gradient-to-br from-primary/10 to-primary/5">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Свободных столов сегодня</p>
-                <p className="mt-2 text-3xl font-bold text-foreground">{availableDesksToday}</p>
-              </div>
-              <Home className="h-8 w-8 text-primary" />
-            </div>
-          </Card>
-          <Card className="p-6 bg-gradient-to-br from-secondary/10 to-secondary/5">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Свободных столов завтра</p>
-                <p className="mt-2 text-3xl font-bold text-foreground">{availableDesksTomorrow}</p>
-              </div>
-              <Home className="h-8 w-8 text-secondary" />
-            </div>
-          </Card>
-        </div>
+        {/* Available Desks Table for 2 weeks */}
+        <Card className="p-6">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b">
+                  {twoWeeksDates.map((date, index) => (
+                    <th key={index} className="px-2 py-3 text-center text-sm font-medium">
+                      {format(date, "EEE", { locale: ru })}
+                      <br />
+                      <span className="text-xs text-muted-foreground">{format(date, "d MMM", { locale: ru })}</span>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  {twoWeeksDates.map((date, index) => {
+                    const availableCount = getAvailableDesksCount(date);
+                    return (
+                      <td key={index} className="px-2 py-3 text-center text-lg font-bold">
+                        {availableCount}
+                      </td>
+                    );
+                  })}
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div className="mt-4 flex justify-center">
+            <DeskReservationDialog />
+          </div>
+        </Card>
 
         {/* Stats */}
         <div className="grid gap-4 md:grid-cols-4">
@@ -357,6 +400,7 @@ const Dashboard = () => {
             const hasBirthdaySoon = isBirthdaySoon(employee.birthday);
             const currentVacation = status === "vacation" ? getCurrentVacationPeriod(employee) : null;
             const upcomingVacation = status === "upcoming_vacation" ? getUpcomingVacationPeriod(employee) : null;
+            const reservedDesk = getReservedDeskForDate(employee.id, today);
 
             return (
               <Card key={employee.id} className="relative overflow-hidden p-6 transition-all hover:shadow-lg">
@@ -393,6 +437,14 @@ const Dashboard = () => {
                         {employee.desk_number ? `№${employee.desk_number}` : "Не назначен"}
                       </span>
                     </div>
+                    {reservedDesk && (
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Забронирован:</span>
+                        <span className="font-medium text-blue-500">
+                          №{reservedDesk}
+                        </span>
+                      </div>
+                    )}
                     {employee.phone && (
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Телефон:</span>
