@@ -38,6 +38,44 @@ export type Database = {
         }
         Relationships: []
       }
+      desk_reservations: {
+        Row: {
+          created_at: string
+          desk_number: number
+          employee_id: string
+          end_date: string
+          id: string
+          start_date: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          desk_number: number
+          employee_id: string
+          end_date: string
+          id?: string
+          start_date: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          desk_number?: number
+          employee_id?: string
+          end_date?: string
+          id?: string
+          start_date?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "desk_reservations_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       employees: {
         Row: {
           birthday: string | null
